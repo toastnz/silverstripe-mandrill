@@ -1,5 +1,10 @@
 <?php
 
+use SilverStripe\ORM\FieldType\DBDate;
+use SilverStripe\Core\Convert;
+use SilverStripe\Security\Member;
+use SilverStripe\View\ViewableData;
+
 /**
  * MandrillClick
  *
@@ -38,7 +43,7 @@ class MandrillClick extends ViewableData
      */
     public function getDate()
     {
-        $date = new Date();
+        $date = new DBDate();
         $date->setValue($this->ts);
         return Convert::raw2xml($date->FormatFromSettings());
     }

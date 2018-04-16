@@ -1,5 +1,7 @@
 <?php
 
+use SilverStripe\View\Requirements_Backend;
+
 /**
  * MandrillRequirementsBackend
  *

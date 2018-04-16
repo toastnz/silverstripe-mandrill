@@ -1,5 +1,8 @@
 <?php
 
+use SilverStripe\Control\HTTPRequest;
+use SilverStripe\Control\Controller;
+
 /**
  * MandrillController - provide extensions points for handling mandrill webhooks
  *
@@ -31,7 +34,7 @@ class MandrillController extends Controller
      * @link http://help.mandrill.com/entries/22092308-What-is-the-format-of-inbound-email-webhooks-
      * @param SS_HTTPRequest $req
      */
-    public function incoming(SS_HTTPRequest $req)
+    public function incoming(HTTPRequest $req)
     {
         $json = $req->postVar('mandrill_events');
 

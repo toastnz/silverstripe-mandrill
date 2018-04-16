@@ -1,5 +1,10 @@
 <?php
 
+use SilverStripe\SiteConfig\SiteConfig;
+use SilverStripe\Control\Email\Email;
+use SilverStripe\Security\Member;
+use SilverStripe\Dev\BuildTask;
+
 /**
  * A simple task to test if your emails are sending properly
  * @author lekoala
@@ -65,7 +70,7 @@ class SendTestEmailTask extends BuildTask
         if (!$to) {
             $email->setToMember($member);
         } else {
-            $member = Member::get()->filter('Email', $to)->first();
+            $member = Member::get()->filter(Email::class, $to)->first();
             if ($member) {
                 $email->setToMember($member);
             } else {

@@ -1,4 +1,13 @@
 <?php
+
+use SilverStripe\Core\Config\Config;
+use SilverStripe\Control\Email\Email;
+use SilverStripe\Control\HTTP;
+use SilverStripe\Control\Director;
+use SilverStripe\Assets\FileNameFilter;
+use SilverStripe\SiteConfig\SiteConfig;
+use SilverStripe\Control\Email\Mailer;
+
 require_once "thirdparty/Mandrill.php";
 
 /*
@@ -14,7 +23,7 @@ require_once "thirdparty/Mandrill.php";
  * @author LeKoala <thomas@lekoala.be>
  */
 
-class MandrillMailer extends Mailer
+class MandrillMailer implements Mailer
 {
 
     /**
@@ -79,7 +88,7 @@ class MandrillMailer extends Mailer
     public static function setAsMailer()
     {
         $mandrillMailer = new MandrillMailer();
-        Email::set_mailer($mandrillMailer);
+//        Email::set_mailer($mandrillMailer);
         if (defined('MANDRILL_SENDING_DISABLED') && MANDRILL_SENDING_DISABLED) {
             self::setSendingDisabled();
         }
@@ -88,8 +97,8 @@ class MandrillMailer extends Mailer
         }
 
         // Use custom classes
-        Object::useCustomClass('Member_ChangePasswordEmail', 'Mandrill_ChangePasswordEmail');
-        Object::useCustomClass('Member_ForgotPasswordEmail', 'Mandrill_ForgotPasswordEmail');
+//        Injector::useCustomClass('Member_ChangePasswordEmail', 'Mandrill_ChangePasswordEmail');
+//        Injector::useCustomClass('Member_ForgotPasswordEmail', 'Mandrill_ForgotPasswordEmail');
     }
 
     /**
@@ -298,33 +307,23 @@ class MandrillMailer extends Mailer
     /**
      * Mandrill takes care for us to send plain and/or html emails. See send method
      *
-     * @param string|array $to
-     * @param string $from
-     * @param string $subject
-     * @param string $plainContent
-     * @param array $attachedFiles
-     * @param array $customheaders
+     * @param Email $email
      * @return array|bool
      */
-    public function sendPlain($to, $from, $subject, $plainContent, $attachedFiles = false, $customheaders = false)
+    public function sendPlain($email)
     {
-        return $this->send($to, $from, $subject, false, $attachedFiles, $customheaders, $plainContent, false);
+        return $this->send($email);
     }
 
     /**
      * Mandrill takes care for us to send plain and/or html emails. See send method
      *
-     * @param string|array $to
-     * @param string $from
-     * @param string $subject
-     * @param string $plainContent
-     * @param array $attachedFiles
-     * @param array $customheaders
+     * @param Email $email
      * @return array|bool
      */
-    public function sendHTML($to, $from, $subject, $htmlContent, $attachedFiles = false, $customheaders = false, $plainContent = false, $inlineImages = false)
+    public function sendHTML($email)
     {
-        return $this->send($to, $from, $subject, $htmlContent, $attachedFiles, $customheaders, $plainContent, $inlineImages);
+        return $this->send($email);
     }
 
     /**
@@ -383,33 +382,28 @@ class MandrillMailer extends Mailer
     /**
      * Send the email through mandrill
      *
-     * @param string|array $to
-     * @param string $from
-     * @param string $subject
-     * @param string $plainContent
-     * @param array $attachedFiles
-     * @param array $customheaders
-     * @param bool $inlineImages
+     * @param Email $email
      * @return array|bool
+     * @throws Exception
      */
-    protected function send($to, $from, $subject, $htmlContent, $attachedFiles = false, $customheaders = false, $plainContent = false, $inlineImages = false)
+    public function send($email)
     {
-        $original_to = $to;
+        $original_to = $email->getTo();
+        $to = $email->getTo();
 
         // Process recipients
         $to_array = array();
         $to_array = $this->appendTo($to_array, $to, 'to');
-        if (isset($customheaders['Cc'])) {
-            $to_array = $this->appendTo($to_array, $customheaders['Cc'], 'cc');
-            unset($customheaders['Cc']);
+
+        if ($email->getCC()) {
+            $to_array = $this->appendTo($to_array, $email->getCC(), 'cc');
         }
-        if (isset($customheaders['Bcc'])) {
-            $to_array = $this->appendTo($to_array, $customheaders['Bcc'], 'bcc');
-            unset($customheaders['Bcc']);
+        if ($email->getBCC()) {
+            $to_array = $this->appendTo($to_array, $email->getBCC(), 'bcc');
         }
 
         // Process sender
-        $fromArray = $this->processRecipient($from);
+        $fromArray = $this->processRecipient($email->getFrom());
         $fromEmail = $fromArray['email'];
         $fromName = $fromArray['name'];
 
@@ -419,7 +413,7 @@ class MandrillMailer extends Mailer
             $default_params = self::getDefaultParams();
         }
         $params = array_merge($default_params, array(
-            "subject" => $subject,
+            "subject" => $email->getSubject(),
             "from_email" => $fromEmail,
             "to" => $to_array
         ));
@@ -428,16 +422,16 @@ class MandrillMailer extends Mailer
         }
 
         // Inject additional params into message
-        if (isset($customheaders['X-MandrillMailer'])) {
-            $params = array_merge($params, $customheaders['X-MandrillMailer']);
-            unset($customheaders['X-MandrillMailer']);
-        }
+//        if (isset($customheaders['X-MandrillMailer'])) {
+//            $params = array_merge($params, $customheaders['X-MandrillMailer']);
+//            unset($customheaders['X-MandrillMailer']);
+//        }
 
-        if ($plainContent) {
-            $params['text'] = $plainContent;
-        }
-        if ($htmlContent) {
-            $params['html'] = $htmlContent;
+//        if ($email->HTML) {
+//            $params['text'] = $plainContent;
+//        }
+        if ($email->getBody()) {
+            $params['html'] = $email->getBody();
         }
 
         // Attach tags to params
@@ -453,7 +447,7 @@ class MandrillMailer extends Mailer
             $params['subaccount'] = self::getSubaccount();
         }
 
-        $bcc_email = Config::inst()->get('Email', 'bcc_all_emails_to');
+        $bcc_email = Config::inst()->get(Email::class, 'bcc_all_emails_to');
         if ($bcc_email) {
             if (is_string($bcc_email)) {
                 $params['bcc_address'] = $bcc_email;
@@ -474,38 +468,38 @@ class MandrillMailer extends Mailer
         }
 
         // Handle files attachments
-        if ($attachedFiles) {
-            $attachments = array();
-
-            // Include any specified attachments as additional parts
-            foreach ($attachedFiles as $file) {
-                if (isset($file['tmp_name']) && isset($file['name'])) {
-                    $attachments[] = $this->encodeFileForEmail($file['tmp_name'], $file['name']);
-                } else {
-                    $attachments[] = $this->encodeFileForEmail($file);
-                }
-            }
-
-            $params['attachments'] = $attachments;
-        }
+//        if ($attachedFiles) {
+//            $attachments = array();
+//
+//            // Include any specified attachments as additional parts
+//            foreach ($attachedFiles as $file) {
+//                if (isset($file['tmp_name']) && isset($file['name'])) {
+//                    $attachments[] = $this->encodeFileForEmail($file['tmp_name'], $file['name']);
+//                } else {
+//                    $attachments[] = $this->encodeFileForEmail($file);
+//                }
+//            }
+//
+//            $params['attachments'] = $attachments;
+//        }
 
         $sendingDisabled = false;
-        if (isset($customheaders['X-SendingDisabled']) && $customheaders['X-SendingDisabled']) {
-            $sendingDisabled = $sendingDisabled;
-            unset($customheaders['X-SendingDisabled']);
-        }
+//        if (isset($customheaders['X-SendingDisabled']) && $customheaders['X-SendingDisabled']) {
+//            $sendingDisabled = $sendingDisabled;
+//            unset($customheaders['X-SendingDisabled']);
+//        }
 
-        if ($customheaders) {
-            $params['headers'] = $customheaders;
-        }
+//        if ($customheaders) {
+//            $params['headers'] = $customheaders;
+//        }
 
         if (self::getEnableLogging()) {
             // Append some extra information at the end
-            $logContent = $htmlContent;
+            $logContent = $email->getBody();
             $logContent .= '<pre>';
             $logContent .= 'To : ' . print_r($original_to, true) . "\n";
-            $logContent .= 'Subject : ' . $subject . "\n";
-            $logContent .= 'Headers : ' . print_r($customheaders, true) . "\n";
+            $logContent .= 'Subject : ' . $email->getSubject() . "\n";
+//            $logContent .= 'Headers : ' . print_r($customheaders, true) . "\n";
             if (!empty($params['from_email'])) {
                 $logContent .= 'From email : ' . $params['from_email'] . "\n";
             }
@@ -523,7 +517,7 @@ class MandrillMailer extends Mailer
                 mkdir($logFolder, 0777, true);
             }
             $filter = new FileNameFilter();
-            $title = substr($filter->filter($subject), 0, 20);
+            $title = substr($filter->filter($email->getSubject()), 0, 20);
             $r = file_put_contents($logFolder . '/' . time() . '-' . $title . '.html', $logContent);
             if (!$r) {
                 throw new Exception('Failed to store email in ' . $logFolder);
@@ -532,7 +526,7 @@ class MandrillMailer extends Mailer
 
         if (self::getSendingDisabled() || $sendingDisabled) {
             $customheaders['X-SendingDisabled'] = true;
-            return array($original_to, $subject, $htmlContent, $customheaders);
+            return array($original_to, $email->getSubject(), $email->getBody(), $customheaders);
         }
 
         try {
@@ -563,7 +557,7 @@ class MandrillMailer extends Mailer
 
         if ($sent) {
             $this->last_is_error = false;
-            return array($original_to, $subject, $htmlContent, $customheaders);
+            return array($original_to, $email->getSubject(), $email->getBody(), []);
         } else {
             $this->last_is_error = true;
             $this->last_error = $ret;

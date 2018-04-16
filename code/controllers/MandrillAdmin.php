@@ -1,5 +1,34 @@
 <?php
 
+use SilverStripe\Control\Email\Email;
+use SilverStripe\Control\Email\Mailer;
+use SilverStripe\Core\Injector\Injector;
+use SilverStripe\Forms\FieldList;
+use SilverStripe\Forms\GridField\GridFieldConfig;
+use SilverStripe\Forms\GridField\GridFieldToolbarHeader;
+use SilverStripe\Forms\GridField\GridFieldSortableHeader;
+use SilverStripe\Forms\GridField\GridFieldDataColumns;
+use SilverStripe\Forms\GridField\GridFieldFooter;
+use SilverStripe\Forms\GridField\GridField;
+use SilverStripe\ORM\FieldType\DBDate;
+use SilverStripe\Core\Convert;
+use SilverStripe\View\Requirements;
+use SilverStripe\ORM\ArrayList;
+use SilverStripe\Forms\Form;
+use SilverStripe\Control\Session;
+use SilverStripe\Forms\DateField;
+use SilverStripe\Forms\TextField;
+use SilverStripe\Forms\DropdownField;
+use SilverStripe\Forms\FormAction;
+use SilverStripe\CMS\Search\SearchForm;
+use SilverStripe\Admin\LeftAndMain;
+use SilverStripe\Security\Permission;
+use SilverStripe\View\ArrayData;
+use SilverStripe\Control\Director;
+use SilverStripe\Forms\LiteralField;
+use SilverStripe\SiteConfig\SiteConfig;
+use SilverStripe\Security\PermissionProvider;
+
 /**
  * Mandrill admin section
  *
@@ -34,7 +63,7 @@ class MandrillAdmin extends LeftAndMain implements PermissionProvider
     private static $cache_enabled = true;
 
     /**
-     * @var MandrilMessage
+     * @var MandrillMessage
      */
     protected $currentMessage;
 
@@ -65,7 +94,7 @@ class MandrillAdmin extends LeftAndMain implements PermissionProvider
      */
     public function getMailer()
     {
-        $mailer = Email::mailer();
+        $mailer = Injector::inst()->get(Mailer::class);
         if (get_class($mailer) != 'MandrillMailer') {
             throw new Exception('This class require to use MandrillMailer');
         }
@@ -120,12 +149,12 @@ class MandrillAdmin extends LeftAndMain implements PermissionProvider
             new GridFieldToolbarHeader(), new GridFieldSortableHeader(), new GridFieldDataColumns(), new GridFieldFooter()
         );
         $gridField = new GridField('SearchResults', _t('MandrillAdmin.SearchResults', 'Search Results'), $this->Messages(), $gridFieldConfig);
-        $columns = $gridField->getConfig()->getComponentByType('GridFieldDataColumns');
+        $columns = $gridField->getConfig()->getComponentByType(GridFieldDataColumns::class);
         $columns->setDisplayFields(array(
-            'date' => _t('MandrillAdmin.MessageDate', 'Date'),
+            'date' => _t('MandrillAdmin.MessageDate', DBDate::class),
             'state' => _t('MandrillAdmin.MessageStatus', 'Status'),
             'sender' => _t('MandrillAdmin.MessageSender', 'Sender'),
-            'email' => _t('MandrillAdmin.MessageEmail', 'Email'),
+            'email' => _t('MandrillAdmin.MessageEmail', Email::class),
             'subject' => _t('MandrillAdmin.MessageSubject', 'Subject'),
             'opens' => _t('MandrillAdmin.MessageOpens', 'Opens'),
             'clicks' => _t('MandrillAdmin.MessageClicks', 'Clicks'),
@@ -340,7 +369,7 @@ class MandrillAdmin extends LeftAndMain implements PermissionProvider
             ), $this->getParam('Limit', 100)));
         $actions = new FieldList();
         $actions->push(new FormAction('doSearch', _t('Mandrill.DOSEARCH', 'Search')));
-        $form = new Form($this, 'SearchForm', $fields, $actions);
+        $form = new Form($this, SearchForm::class, $fields, $actions);
         return $form;
     }
 
@@ -380,7 +409,7 @@ class MandrillAdmin extends LeftAndMain implements PermissionProvider
      */
     public function canView($member = null)
     {
-        $mailer = Email::mailer();
+        $mailer = Injector::inst()->get(Mailer::class);
         if (get_class($mailer) != 'MandrillMailer') {
             return false;
         }

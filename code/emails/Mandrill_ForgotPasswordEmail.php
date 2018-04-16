@@ -1,5 +1,7 @@
 <?php
 
+use SilverStripe\View\SSViewer;
+
 /**
  * Replace the default Member_ForgotPasswordEmail
  *

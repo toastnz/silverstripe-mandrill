@@ -1,5 +1,9 @@
 <?php
 
+use SilverStripe\Forms\FieldList;
+use SilverStripe\Forms\TextField;
+use SilverStripe\ORM\DataExtension;
+
 /**
  * Sample SiteConfig ready to be integrated with Mandrill emails
  */

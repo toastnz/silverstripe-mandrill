@@ -1,0 +1,7 @@
+---
+Name: mandrillroutes
+After: framework/routes#coreroutes
+---
+SilverStripe\Control\Director:
+  rules:
+    mandrill//$Action/$ID/$Name: MandrillController

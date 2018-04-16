@@ -1,5 +1,20 @@
 <?php
 
+use SilverStripe\SiteConfig\SiteConfig;
+use SilverStripe\Security\Member;
+use SilverStripe\i18n\i18n;
+use SilverStripe\Control\Controller;
+use SilverStripe\Core\Config\Config;
+use SilverStripe\View\SSViewer;
+use SilverStripe\View\Requirements;
+use SilverStripe\View\SSViewer_FromString;
+use SilverStripe\Assets\Image;
+use SilverStripe\Control\Email\Email;
+use SilverStripe\Control\Director;
+use SilverStripe\Control\HTTP;
+use SilverStripe\View\ViewableData;
+use SilverStripe\View\ViewableData_Customised;
+
 /**
  * An improved and more pleasant base Email class to use on your project
  *
@@ -61,7 +76,7 @@ class MandrillEmail extends Email
 
         // Use config template
         if ($defaultTemplate = self::config()->default_template) {
-            $this->setTemplate($defaultTemplate);
+            $this->setHTMLTemplate($defaultTemplate);
         }
 
         // Allow subclass template
@@ -107,10 +122,10 @@ class MandrillEmail extends Email
         // Check required objects
         if ($this->required_objects) {
             foreach ($this->required_objects as $reqName => $reqClass) {
-                if ($reqName == 'Member' && !$this->templateData()->$reqName) {
+                if ($reqName == Member::class && !$this->templateData()->$reqName) {
                     $this->templateData()->$reqName = Member::currentUser();
                 }
-                if ($reqName == 'SiteConfig' && !$this->templateData()->$reqName) {
+                if ($reqName == SiteConfig::class && !$this->templateData()->$reqName) {
                     $this->templateData()->$reqName = SiteConfig::current_site_config();
                 }
                 if (!$this->templateData()->$reqName && self::$required_objects_throw_exceptions) {
@@ -155,7 +170,7 @@ class MandrillEmail extends Email
             }
         }
 
-        $res = parent::send($messageID);
+        $res = parent::send();
 
         if ($restore_locale) {
             i18n::set_locale($restore_locale);
@@ -297,8 +312,8 @@ class MandrillEmail extends Email
      */
     protected function parseVariables($isPlain = false)
     {
-        $origState = Config::inst()->get('SSViewer', 'source_file_comments');
-        Config::inst()->update('SSViewer', 'source_file_comments', false);
+        $origState = Config::inst()->get(SSViewer::class, 'source_file_comments');
+        Config::inst()->update(SSViewer::class, 'source_file_comments', false);
 
         // Workaround to avoid clutter in our rendered html
         $backend = Requirements::backend();
@@ -381,7 +396,7 @@ class MandrillEmail extends Email
             // Rewrite relative URLs
             $this->body = self::rewriteURLs($fullBody);
         }
-        Config::inst()->update('SSViewer', 'source_file_comments', $origState);
+        Config::inst()->update(SSViewer::class, 'source_file_comments', $origState);
         Requirements::set_backend($backend);
 
         return $this;
@@ -686,9 +701,10 @@ class MandrillEmail extends Email
      * Set recipient
      *
      * @param string $val
+     * @param string|null   $name
      * @return Email
      */
-    public function setTo($val)
+    public function setTo($val, $name = null)
     {
         if ($this->to_member && $val !== $this->to_member->Email) {
             $this->to_member = false;

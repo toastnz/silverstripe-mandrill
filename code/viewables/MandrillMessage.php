@@ -1,4 +1,11 @@
 <?php
+
+use SilverStripe\ORM\ArrayList;
+use SilverStripe\View\ViewableData;
+use SilverStripe\Control\Controller;
+use SilverStripe\ORM\FieldType\DBDate;
+use SilverStripe\Core\Convert;
+use SilverStripe\Security\Member;
 /*
  * Mandrill message to be displayed in a gridfield
  *
@@ -135,7 +142,7 @@ class MandrillMessage extends ViewableData
      */
     public function getDate()
     {
-        $date = new Date();
+        $date = new DBDate();
         $date->setValue($this->ts);
         return Convert::raw2xml($date->FormatFromSettings());
     }
