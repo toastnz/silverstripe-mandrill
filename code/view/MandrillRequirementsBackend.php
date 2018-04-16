@@ -13,7 +13,7 @@ use SilverStripe\View\Requirements_Backend;
 class MandrillRequirementsBackend extends Requirements_Backend
 {
 
-    public function includeInHTML($templateFile, $content)
+    public function includeInHTML($content)
     {
         return $content;
     }

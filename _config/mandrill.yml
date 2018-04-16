@@ -1,19 +1,26 @@
 ---
 Name: mandrill
+After:
+  - emailconfig
 ---
 SilverStripe\Core\Injector\Injector:
   Member_ChangePasswordEmail:
     class: Mandrill_ChangePasswordEmail
   Member_ForgotPasswordEmail:
     class: Mandrill_ForgotPasswordEmail
+  SilverStripe\Control\Email\Mailer:
+    class: MandrillMailer
+    properties:
+      SwiftMailer: '%$MandrillMailer'
+  Psr\SimpleCache\CacheInterface.MandrillAdmin:
+    factory: SilverStripe\Core\Cache\CacheFactory
+    constructor:
+      namespace: "MandrillAdmin"
+
 
 SilverStripe\SiteConfig\SiteConfig:
   extensions:
     - MandrillSiteConfig
-
-SilverStripe\Core\Injector\Injector:
-  SilverStripe\Control\Email\Mailer:
-    class: MandrillMailer
 
 MandrillMailer:
   default_params:

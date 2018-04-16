@@ -1,5 +1,7 @@
 <?php
 
+use SilverStripe\Dev\Debug;
+use SilverStripe\Security\Security;
 use SilverStripe\SiteConfig\SiteConfig;
 use SilverStripe\Control\Email\Email;
 use SilverStripe\Security\Member;
@@ -21,7 +23,7 @@ class SendTestEmailTask extends BuildTask
 
         $default = Email::config()->admin_email;
         $default_config = $config->DefaultFromEmail;
-        $member = Member::currentUser();
+        $member = Security::getCurrentUser();
         $to = $request->getVar('email');
         $template = $request->getVar('template');
         $disabled = $request->getVar('disabled');
@@ -55,22 +57,23 @@ class SendTestEmailTask extends BuildTask
                 $to = $default;
             }
         }
-
-        if ($template) {
-            $emailTemplate = EmailTemplate::getByCode($template);
-            $email = $emailTemplate->getEmail();
-            $email->setSubject('Template ' . $template . ' from ' . $config->Title);
-            $email->setSampleRequiredObjects();
-        } else {
+//
+//        if ($template) {
+//            $emailTemplate = EmailTemplate::getByCode($template);
+//            $email = $emailTemplate->getEmail();
+//            $email->setSubject('Template ' . $template . ' from ' . $config->Title);
+//            $email->setSampleRequiredObjects();
+//        } else {
             $email = new MandrillEmail();
             $email->setSampleContent();
             $email->setSubject('Sample email from ' . $config->Title);
-        }
+//        }
 
         if (!$to) {
             $email->setToMember($member);
         } else {
-            $member = Member::get()->filter(Email::class, $to)->first();
+            /** @var Member $member */
+            $member = Member::get()->filter('Email', $to)->first();
             if ($member) {
                 $email->setToMember($member);
             } else {
@@ -78,17 +81,20 @@ class SendTestEmailTask extends BuildTask
             }
         }
 
-        echo 'Sending to ' . htmlentities($email->To()) . '<br/>';
+
+        echo 'Sending to ' . implode(', ', array_keys($email->getTo())) . '<br/>';
         echo 'Using theme : ' . $email->getTheme() . '<br/>';
         echo '<hr/>';
 
         $res = $email->send();
 
+//        Debug::dump($email);
+
         // Success!
         if ($res && is_array($res)) {
             echo '<div style="color:green">Successfully sent your email</div>';
             echo 'Recipient : ' . $res[0] . '<br/>';
-            echo 'Additionnal headers : <br/>';
+            echo 'Additional headers : <br/>';
             foreach ($res[3] as $k => $v) {
                 echo "$k : $v" . '<br/>';
             }

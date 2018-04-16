@@ -1,10 +1,15 @@
 <?php
 
+use Psr\Log\LoggerInterface;
 use SilverStripe\Core\Config\Config;
 use SilverStripe\Control\Email\Email;
 use SilverStripe\Control\HTTP;
 use SilverStripe\Control\Director;
 use SilverStripe\Assets\FileNameFilter;
+use SilverStripe\Core\Config\Configurable;
+use SilverStripe\Core\Extensible;
+use SilverStripe\Core\Injector\Injectable;
+use SilverStripe\Core\Injector\Injector;
 use SilverStripe\SiteConfig\SiteConfig;
 use SilverStripe\Control\Email\Mailer;
 
@@ -25,7 +30,9 @@ require_once "thirdparty/Mandrill.php";
 
 class MandrillMailer implements Mailer
 {
-
+    use Extensible;
+    use Injectable;
+    use Configurable;
     /**
      * @var Mandrill
      */
@@ -88,6 +95,7 @@ class MandrillMailer implements Mailer
     public static function setAsMailer()
     {
         $mandrillMailer = new MandrillMailer();
+
 //        Email::set_mailer($mandrillMailer);
         if (defined('MANDRILL_SENDING_DISABLED') && MANDRILL_SENDING_DISABLED) {
             self::setSendingDisabled();
@@ -343,7 +351,7 @@ class MandrillMailer implements Mailer
         } else {
             $email = $recipient;
             // As a fallback, extract the first part of the email as the name
-            if (self::config()->name_fallback) {
+            if ($this->config()->get('name_fallback')) {
                 $name = trim(ucwords(str_replace(array('.', '-', '_'), ' ', substr($email, 0, strpos($email, '@')))));
             } else {
                 $name = null;
@@ -561,9 +569,10 @@ class MandrillMailer implements Mailer
         } else {
             $this->last_is_error = true;
             $this->last_error = $ret;
-            SS_Log::log("Failed to send $failed emails", SS_Log::DEBUG);
+            Injector::inst()->get(LoggerInterface::class)->debug("Failed to send $failed emails");
+
             foreach ($reasons as $reason) {
-                SS_Log::log("Failed to send because: $reason", SS_Log::DEBUG);
+                Injector::inst()->get(LoggerInterface::class)->debug("Failed to send because: $reason");
             }
             return false;
         }
@@ -694,12 +703,12 @@ class MandrillMailer implements Mailer
         } else {
             $this->last_is_error = true;
             $this->last_error = $ret;
-            SS_Log::log("Failed to send $failed emails", SS_Log::DEBUG);
+            Injector::inst()->get(LoggerInterface::class)->debug("Failed to send $failed emails");
             foreach ($reasons as $reason) {
                 if ($reason == 'unsigned') {
                     $reason .= ' - senders domain ' . $fromEmail . ' is not properly configured';
                 }
-                SS_Log::log("Failed to send because: $reason", SS_Log::DEBUG);
+                Injector::inst()->get(LoggerInterface::class)->debug("Failed to send because: $reason");
             }
             return false;
         }
@@ -755,7 +764,7 @@ class MandrillMailer implements Mailer
         if (!empty($config->DefaultFromEmail)) {
             return $config->DefaultFromEmail;
         }
-        if ($from = Email::config()->admin_email) {
+        if ($from = Config::inst()->get(Email::class, 'admin_email')) {
             return $from;
         }
         return self::createDefaultEmail();

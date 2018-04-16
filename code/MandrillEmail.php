@@ -1,5 +1,8 @@
 <?php
 
+use Psr\Log\LoggerInterface;
+use SilverStripe\Core\Injector\Injector;
+use SilverStripe\Security\Security;
 use SilverStripe\SiteConfig\SiteConfig;
 use SilverStripe\Security\Member;
 use SilverStripe\i18n\i18n;
@@ -81,7 +84,7 @@ class MandrillEmail extends Email
 
         // Allow subclass template
         $class = get_called_class();
-        if ($class != 'MandrillEmail') {
+        if ($class != MandrillEmail::class) {
             $this->ss_template = array('email/' . $class, $this->ss_template);
         }
 
@@ -135,20 +138,25 @@ class MandrillEmail extends Email
         }
 
         // Check for Subject
-        if (!$this->subject) {
+        if (!$this->getSubject()) {
             throw new Exception('You must set a subject');
         }
 
-        $this->from = MandrillMailer::resolveDefaultFromEmail($this->from);
-        if (!$this->from) {
+        $from = $this->getFrom();
+        $from = MandrillMailer::resolveDefaultFromEmail($from);
+        if (!$from) {
             throw new Exception('You must set a sender');
         }
-        if ($this->to_member && !$this->to) {
+
+        $to = $this->getTo();
+        $toMember = $this->getToMember();
+
+        if ($toMember && !$to) {
             // Include name in to as standard rfc
-            $this->to = $this->to_member->FirstName . ' ' . $this->to_member->Surname . ' <' . $this->to_member->Email . '>';
+            $to = $toMember->FirstName . ' ' . $toMember->Surname . ' <' . $toMember->Email . '>';
         }
-        $this->to = MandrillMailer::resolveDefaultToEmail($this->to);
-        if (!$this->to) {
+        $to = MandrillMailer::resolveDefaultToEmail($to);
+        if (!$to) {
             throw new Exception('You must set a recipient');
         }
 
@@ -158,14 +166,14 @@ class MandrillEmail extends Email
             $restore_locale = i18n::get_locale();
             i18n::set_locale($this->locale);
         }
-        if ($this->to_member) {
+        if ($toMember) {
             // If no locale is defined, use Member locale
-            if ($this->to_member->Locale && !$this->locale) {
+            if ($toMember->Locale && !$this->locale) {
                 $restore_locale = i18n::get_locale();
-                i18n::set_locale($this->to_member->Locale);
+                i18n::set_locale($toMember->Locale);
             }
             // Maybe this member don't want to receive emails?
-            if ($this->to_member->hasMethod('canReceiveEmails') && !$this->to_member->canReceiveEmails()) {
+            if ($toMember->hasMethod('canReceiveEmails') && !$toMember->canReceiveEmails()) {
                 return false;
             }
         }
@@ -253,19 +261,19 @@ class MandrillEmail extends Email
 
         // Infos set by Silverstripe
         $originalInfos = array(
-            "To" => $this->to,
-            "Cc" => $this->cc,
-            "Bcc" => $this->bcc,
-            "From" => $this->from,
-            "Subject" => $this->subject,
-            "Body" => $this->body,
+            "To" => $this->getTo(),
+            "Cc" => $this->getCC(),
+            "Bcc" => $this->getBCC(),
+            "From" => $this->getFrom(),
+            "Subject" => $this->getSubject(),
+            "Body" => $this->getBody(),
             "BaseURL" => $this->BaseURL(),
             "IsEmail" => true,
         );
 
         // Infos injected from the models
         $modelsInfos = array(
-            'CurrentMember' => Member::currentUser(),
+            'CurrentMember' => Security::getCurrentUser(),
             'CurrentSiteConfig' => SiteConfig::current_site_config(),
             'CurrentController' => Controller::curr(),
         );
@@ -344,7 +352,7 @@ class MandrillEmail extends Email
                     $viewer = new SSViewer_FromString($fullBody);
                     $fullBody = $viewer->process($data);
                 } catch (Exception $ex) {
-                    SS_Log::log($ex->getMessage(), SS_Log::DEBUG);
+                    Injector::inst()->get(LoggerInterface::class)->debug($ex->getMessage());
                 }
 
 
@@ -353,7 +361,7 @@ class MandrillEmail extends Email
                     $viewer = new SSViewer_FromString($this->subject);
                     $this->subject = $viewer->process($data);
                 } catch (Exception $ex) {
-                    SS_Log::log($ex->getMessage(), SS_Log::DEBUG);
+                    Injector::inst()->get(LoggerInterface::class)->debug($ex->getMessage());
                 }
 
 
@@ -362,7 +370,7 @@ class MandrillEmail extends Email
                         $viewer = new SSViewer_FromString($this->callout);
                         $this->callout = $viewer->process($data);
                     } catch (Exception $ex) {
-                        SS_Log::log($ex->getMessage(), SS_Log::DEBUG);
+                        Injector::inst()->get(LoggerInterface::class)->debug($ex->getMessage());
                     }
                 }
                 if ($this->sidebar) {
@@ -370,7 +378,7 @@ class MandrillEmail extends Email
                         $viewer = new SSViewer_FromString($this->sidebar);
                         $this->sidebar = $viewer->process($data);
                     } catch (Exception $ex) {
-                        SS_Log::log($ex->getMessage(), SS_Log::DEBUG);
+                        Injector::inst()->get(LoggerInterface::class)->debug($ex->getMessage());
                     }
                 }
             }
@@ -388,7 +396,7 @@ class MandrillEmail extends Email
                     try {
                         $fullBody = $template->process($data);
                     } catch (Exception $ex) {
-                        SS_Log::log($ex->getMessage(), SS_Log::DEBUG);
+                        Injector::inst()->get(LoggerInterface::class)->debug($ex->getMessage());
                     }
                 }
             }
@@ -505,8 +513,11 @@ class MandrillEmail extends Email
     {
         if (is_int($image)) {
             $image = Image::get()->byID($image);
+            if ($image && $image->exists()) {
+                $this->image = $image->ScaleWidth($size)->Link();
+            }
         }
-        $this->image = $image->SetWidth($size)->Link();
+//        $this->image = $image->ScaleWidth($size)->Link();
     }
 
     /**
@@ -677,7 +688,7 @@ class MandrillEmail extends Email
             }
             $data[$name] = $o;
         }
-        $this->populateTemplate($data);
+        $this->setData($data);
     }
 
     /**
@@ -772,7 +783,7 @@ class MandrillEmail extends Email
         $this->locale = $member->Locale;
         $this->to_member = $member;
 
-        $this->populateTemplate(array('Member' => $member));
+        $this->setData(array('Member' => $member));
 
         return $this->setTo($member->Email);
     }
@@ -784,10 +795,10 @@ class MandrillEmail extends Email
      */
     public function setToCurrentMember()
     {
-        if (!Member::currentUserID()) {
+        if (!Security::getCurrentUser()) {
             throw new Exception("There is no current user");
         }
-        return $this->setToMember(Member::currentUser());
+        return $this->setToMember(Security::getCurrentUser());
     }
 
     /**
