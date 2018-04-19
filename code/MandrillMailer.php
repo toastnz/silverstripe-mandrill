@@ -10,6 +10,7 @@ use SilverStripe\Core\Config\Configurable;
 use SilverStripe\Core\Extensible;
 use SilverStripe\Core\Injector\Injectable;
 use SilverStripe\Core\Injector\Injector;
+use SilverStripe\Dev\Debug;
 use SilverStripe\SiteConfig\SiteConfig;
 use SilverStripe\Control\Email\Mailer;
 
@@ -94,9 +95,11 @@ class MandrillMailer implements Mailer
      */
     public static function setAsMailer()
     {
+
+        Config::modify()->set(Injector::class, Mailer::class, __CLASS__);
+
         $mandrillMailer = new MandrillMailer();
 
-//        Email::set_mailer($mandrillMailer);
         if (defined('MANDRILL_SENDING_DISABLED') && MANDRILL_SENDING_DISABLED) {
             self::setSendingDisabled();
         }
@@ -176,13 +179,12 @@ class MandrillMailer implements Mailer
 
     /**
      * Set default params
-     * @param string $v
+     * @param array $v
      * @return \MandrillMailer
      */
     public static function setDefaultParams(array $v)
     {
-        Config::inst()->update(__CLASS__, 'default_params', $v);
-        return $this;
+        Config::modify()->set(__CLASS__, 'default_params', $v);
     }
 
     /**
@@ -201,8 +203,7 @@ class MandrillMailer implements Mailer
      */
     public static function setSubaccount($v)
     {
-        Config::inst()->update(__CLASS__, 'subaccount', $v);
-        return $this;
+        Config::modify()->set(__CLASS__, 'subaccount', $v);
     }
 
     /**
@@ -217,12 +218,10 @@ class MandrillMailer implements Mailer
     /**
      * Set use_google_analytics
      * @param string $v
-     * @return \MandrillMailer
      */
     public static function setUseGoogleAnalytics($v)
     {
-        Config::inst()->update(__CLASS__, 'use_google_analytics', $v);
-        return $this;
+        Config::modify()->set(__CLASS__, 'use_google_analytics', $v);
     }
 
     /**
@@ -241,14 +240,13 @@ class MandrillMailer implements Mailer
     /**
      * Set global tags applied to all outgoing emails
      * @param array $arr
-     * @return \MandrillMailer
      */
     public static function setGlobalTags($arr)
     {
         if (is_string($arr)) {
             $arr = array($arr);
         }
-        return Config::inst()->update(__CLASS__, 'global_tags', $arr);
+        Config::modify()->set(__CLASS__, 'global_tags', $arr);
     }
 
     /**
@@ -342,25 +340,33 @@ class MandrillMailer implements Mailer
      */
     protected function processRecipient($recipient)
     {
+
         if (is_array($recipient)) {
-            $email = $recipient['email'];
-            $name = $recipient['name'];
+            if (isset($recipient['email'])) {
+                $email = $recipient['email'];
+                $name  = $recipient['name'];
+            } else {
+                // Plain array: implode
+                $email = implode(',', array_keys($recipient));
+                $name = implode(',', array_values($recipient));
+            }
+
         } elseif (strpos($recipient, '<') !== false) {
             $email = self::get_email_from_rfc_email($recipient);
-            $name = self::get_displayname_from_rfc_email($recipient);
+            $name  = self::get_displayname_from_rfc_email($recipient);
         } else {
             $email = $recipient;
             // As a fallback, extract the first part of the email as the name
             if ($this->config()->get('name_fallback')) {
-                $name = trim(ucwords(str_replace(array('.', '-', '_'), ' ', substr($email, 0, strpos($email, '@')))));
+                $name = trim(ucwords(str_replace(['.', '-', '_'], ' ', substr($email, 0, strpos($email, '@')))));
             } else {
                 $name = null;
             }
         }
-        return array(
+        return [
             'email' => $email,
-            'name' => $name
-        );
+            'name'  => $name
+        ];
     }
 
     /**
@@ -376,13 +382,18 @@ class MandrillMailer implements Mailer
         if (!is_array($recipients)) {
             $recipients = explode(',', $recipients);
         }
-        foreach ($recipients as $recipient) {
-            $r = $this->processRecipient($recipient);
-            $arr[] = array(
-                'email' => $r['email'],
-                'name' => $r['name'],
-                'type' => $type
-            );
+
+        foreach ($recipients as $email => $name) {
+
+            $r = $this->processRecipient($email);
+
+            if (!empty($r)) {
+                $arr[] = array(
+                    'email' => $r['email'],
+                    'name' => $r['name'],
+                    'type' => $type
+                );
+            }
         }
         return $arr;
     }
@@ -411,7 +422,10 @@ class MandrillMailer implements Mailer
         }
 
         // Process sender
-        $fromArray = $this->processRecipient($email->getFrom());
+        $from = $email->getFrom();
+
+        $fromArray = $this->processRecipient($from);
+
         $fromEmail = $fromArray['email'];
         $fromName = $fromArray['name'];
 
@@ -420,14 +434,18 @@ class MandrillMailer implements Mailer
         if (self::getDefaultParams()) {
             $default_params = self::getDefaultParams();
         }
-        $params = array_merge($default_params, array(
-            "subject" => $email->getSubject(),
+
+
+        $params = array_merge($default_params, [
+            "subject"    => $email->getSubject(),
             "from_email" => $fromEmail,
-            "to" => $to_array
-        ));
+            "to"         => $to_array
+        ]);
+
         if ($fromName) {
             $params['from_name'] = $fromName;
         }
+
 
         // Inject additional params into message
 //        if (isset($customheaders['X-MandrillMailer'])) {
@@ -609,6 +627,7 @@ class MandrillMailer implements Mailer
         $fromEmail = $fromArray['email'];
         $fromName = $fromArray['name'];
 
+
         // Create params to send to mandrill message api
         $default_params = array();
 
@@ -628,6 +647,7 @@ class MandrillMailer implements Mailer
         if ($fromName) {
             $params['from_name'] = $fromName;
         }
+
 
         // If merge vars specified then include them.
         if ($globalMergeVars) {
@@ -779,9 +799,13 @@ class MandrillMailer implements Mailer
     {
         // In case of multiple recipients, do not validate anything
         if (is_array($to) || strpos($to, ',') !== false) {
-            return $to;
+            if (!empty($to)) {
+                return $to;
+            }
         }
+
         $original_to = $to;
+
         if (!empty($to)) {
             $to = MandrillMailer::get_email_from_rfc_email($to);
             if (filter_var($to, FILTER_VALIDATE_EMAIL)) {
@@ -795,6 +819,7 @@ class MandrillMailer implements Mailer
         if ($admin = Email::config()->admin_email) {
             return $admin;
         }
+
         return false;
     }
 

@@ -2,6 +2,7 @@
 
 use Psr\Log\LoggerInterface;
 use SilverStripe\Core\Injector\Injector;
+use SilverStripe\Dev\Debug;
 use SilverStripe\Security\Security;
 use SilverStripe\SiteConfig\SiteConfig;
 use SilverStripe\Security\Member;
@@ -126,7 +127,7 @@ class MandrillEmail extends Email
         if ($this->required_objects) {
             foreach ($this->required_objects as $reqName => $reqClass) {
                 if ($reqName == Member::class && !$this->templateData()->$reqName) {
-                    $this->templateData()->$reqName = Member::currentUser();
+                    $this->templateData()->$reqName = Security::getCurrentUser();
                 }
                 if ($reqName == SiteConfig::class && !$this->templateData()->$reqName) {
                     $this->templateData()->$reqName = SiteConfig::current_site_config();
@@ -156,6 +157,7 @@ class MandrillEmail extends Email
             $to = $toMember->FirstName . ' ' . $toMember->Surname . ' <' . $toMember->Email . '>';
         }
         $to = MandrillMailer::resolveDefaultToEmail($to);
+
         if (!$to) {
             throw new Exception('You must set a recipient');
         }
@@ -321,7 +323,7 @@ class MandrillEmail extends Email
     protected function parseVariables($isPlain = false)
     {
         $origState = Config::inst()->get(SSViewer::class, 'source_file_comments');
-        Config::inst()->update(SSViewer::class, 'source_file_comments', false);
+        Config::modify()->set(SSViewer::class, 'source_file_comments', false);
 
         // Workaround to avoid clutter in our rendered html
         $backend = Requirements::backend();
@@ -404,7 +406,7 @@ class MandrillEmail extends Email
             // Rewrite relative URLs
             $this->body = self::rewriteURLs($fullBody);
         }
-        Config::inst()->update(SSViewer::class, 'source_file_comments', $origState);
+        Config::modify()->set(SSViewer::class, 'source_file_comments', $origState);
         Requirements::set_backend($backend);
 
         return $this;

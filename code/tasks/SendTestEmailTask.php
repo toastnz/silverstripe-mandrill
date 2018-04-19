@@ -1,5 +1,6 @@
 <?php
 
+use SilverStripe\Core\Config\Config;
 use SilverStripe\Dev\Debug;
 use SilverStripe\Security\Security;
 use SilverStripe\SiteConfig\SiteConfig;
@@ -45,6 +46,8 @@ class SendTestEmailTask extends BuildTask
         echo "To prevent email from being sent, you can pass ?disabled=1<br/>";
         echo '<hr/>';
 
+        echo Config::inst()->get(MandrillMailer::class, 'mandrill_api_key') . '<br>';
+
         if (!$default && $default_config) {
             $default = $default_config;
         }
@@ -81,6 +84,7 @@ class SendTestEmailTask extends BuildTask
             }
         }
 
+        Debug::dump($to);
 
         echo 'Sending to ' . implode(', ', array_keys($email->getTo())) . '<br/>';
         echo 'Using theme : ' . $email->getTheme() . '<br/>';
@@ -88,7 +92,6 @@ class SendTestEmailTask extends BuildTask
 
         $res = $email->send();
 
-//        Debug::dump($email);
 
         // Success!
         if ($res && is_array($res)) {
@@ -103,6 +106,8 @@ class SendTestEmailTask extends BuildTask
         // Failed!
         else {
             echo '<div style="color:red">Failed to send email</div>';
+
+            Debug::dump(MandrillMailer::getInstance()->getLastError());
             echo 'Error is : ' . MandrillMailer::getInstance()->getLastError();
         }
     }
