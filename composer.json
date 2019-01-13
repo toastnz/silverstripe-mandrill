@@ -16,7 +16,7 @@
         }
     ],
     "require": {
-        "silverstripe/recipe-cms": "^1.0.3"
+        "silverstripe/recipe-cms": "^4.3.0"
     },
     "suggest": {
         "lekoala/silverstripe-form-extras": "Better form fields"
